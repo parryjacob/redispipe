@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import os
+import sys
+import redis
+import subprocess
+import hashlib
+import threading
+import time
+
+
+class SubprocessQueueReader(threading.Thread):
+    def __init__(self, fd, rpool, rqueue):
+        threading.Thread.__init__(self)
+        self._fd = fd
+        self._rqueue = rqueue
+        self._redis = redis.StrictRedis(connection_pool=rpool)
+
+    def run(self):
+        # Publish to Redis whenever we get output
+        for line in iter(self._fd.readline, b''):
+            self._redis.publish(self._rqueue, line)
+
+    def eof(self):
+        return not self.is_alive()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        sys.exit(0)
+
+    # If we run a Python application, we want it to be unbuffered or
+    # we'll experience a lot of problems
+    os.putenv("PYTHONUNBUFFERED", "True")
+    os.environ["PYTHONUNBUFFERED"] = "True"
+
+    # Get the command from the CLI
+    cmd = sys.argv[1:]
+    cmd_hash = hashlib.md5(' '.join(cmd)).hexdigest()
+
+    # Settings are specified in the environment
+    redis_url = os.environ.get("REDISPIPE_URL", "redis://127.0.0.1:6379")
+    redis_queue = os.environ.get("REDISPIPE_QUEUE", "redispipe_%s" % (cmd_hash,))
+    quiet = os.environ.get("REDISPIPE_QUIET", None) is not None
+
+    if not quiet:
+        print ("Redis URL: %s" % (redis_url,))
+        print ("Redis queue prefix: %s" % (redis_queue,))
+
+    # Setup the pool for our Redis connections
+    rpool = redis.ConnectionPool.from_url(redis_url)
+
+    # Start the desired process
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+
+    # Publish the messages from stdout/stderr
+    stdout = SubprocessQueueReader(process.stdout, rpool, "%s_%s" % (redis_queue, "stdout"))
+    stderr = SubprocessQueueReader(process.stderr, rpool, "%s_%s" % (redis_queue, "stderr"))
+    stdout.start()
+    stderr.start()
+
+    # Subscribe to all desired stdin
+    rstdin = redis.StrictRedis(connection_pool=rpool)
+    p = rstdin.pubsub(ignore_subscribe_messages=True)
+    p.subscribe("%s_%s" % (redis_queue, "stdin"))
+
+    try:
+        while process.poll() is None:
+            message = p.get_message()
+            if message is not None:
+                if message['type'] == 'message' or message['type'] == 'pmessage':
+                    inp = message['data']
+                    process.stdin.write(inp)
+                    process.stdin.write("\n")
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        if not quiet:
+            print ("Ctrl+C")
+        try:
+            process.terminate()
+        except:
+            pass
+
+    if not quiet:
+        print ("----- Process Terminated -----")
+
+    # Wait for our threads to die
+    stdout.join(timeout=5)
+    stderr.join(timeout=5)
+
+    # Kill out file descriptors
+    try:
+        process.stdout.close()
+    except:
+        pass
+    try:
+        process.stderr.close()
+    except:
+        pass
+
+    # Say bye to Redis
+    try:
+        p.unsubscribe()
+    except:
+        pass
