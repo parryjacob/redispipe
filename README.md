@@ -11,3 +11,5 @@ a useless value involving the MD5 sum of the command - you should *really*
 set this or this entire thing will be useless
 
 `REDISPIPE_QUIET` - don't output anything (Redis prefix, termination, etc)
+
+`REDISPIPE_COMBINE` - if set, `stderr` will be merged into `stdout`

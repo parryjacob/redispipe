@@ -41,11 +41,13 @@ if __name__ == "__main__":
     # Settings are specified in the environment
     redis_url = os.environ.get("REDISPIPE_URL", "redis://127.0.0.1:6379")
     redis_queue = os.environ.get("REDISPIPE_QUEUE", "redispipe_%s" % (cmd_hash,))
+    combine = os.environ.get("REDISPIPE_COMBINE", None) is not None
     quiet = os.environ.get("REDISPIPE_QUIET", None) is not None
 
     if not quiet:
         print ("Redis URL: %s" % (redis_url,))
         print ("Redis queue prefix: %s" % (redis_queue,))
+        print ("Combining stderr and stdout: %s" % (combine,))
 
     # Setup the pool for our Redis connections
     rpool = redis.ConnectionPool.from_url(redis_url)
@@ -55,7 +57,7 @@ if __name__ == "__main__":
 
     # Publish the messages from stdout/stderr
     stdout = SubprocessQueueReader(process.stdout, rpool, "%s_%s" % (redis_queue, "stdout"))
-    stderr = SubprocessQueueReader(process.stderr, rpool, "%s_%s" % (redis_queue, "stderr"))
+    stderr = SubprocessQueueReader(process.stderr, rpool, "%s_%s" % (redis_queue, ("stdout" if combine else "stderr")))
     stdout.start()
     stderr.start()
 
