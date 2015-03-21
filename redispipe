@@ -40,7 +40,13 @@ if __name__ == "__main__":
 
     # Settings are specified in the environment
     redis_url = os.environ.get("REDISPIPE_URL", "redis://127.0.0.1:6379")
-    redis_queue = os.environ.get("REDISPIPE_QUEUE", "redispipe_%s" % (cmd_hash,))
+
+    # Use the supervisord process name, if it exists
+    queue_default = "redispipe_%s" % (cmd_hash,)
+    if os.environ.get("SUPERVISOR_PROCESS_NAME", None) is not None:
+        queue_default = "redispipe_%s" % (str(os.environ.get("SUPERVISOR_PROCESS_NAME")),)
+
+    redis_queue = os.environ.get("REDISPIPE_QUEUE", queue_default)
     combine = os.environ.get("REDISPIPE_COMBINE", None) is not None
     quiet = os.environ.get("REDISPIPE_QUIET", None) is not None
 
