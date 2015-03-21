@@ -73,6 +73,7 @@ if __name__ == "__main__":
 
     # Publish the messages from stdout/stderr
     stdout = SubprocessQueueReader(stdout_fd, rpool, "%s_%s" % (redis_queue, "stdout"))
+    stdout.daemon = True
     stdout.start()
 
     # Subscribe to all desired stdin
@@ -104,8 +105,9 @@ if __name__ == "__main__":
     if not quiet:
         print ("----- Process Terminated -----")
 
-    # Wait for our threads to die
-    stdout.join(timeout=5)
+    # Give it a chance to clear out the buffer
+    if stdout.is_alive():
+        time.sleep(1)
 
     # Kill out file descriptors
     try:
