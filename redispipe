@@ -15,11 +15,14 @@ class SubprocessQueueReader(threading.Thread):
         self._fd = fd
         self._rqueue = rqueue
         self._redis = redis.StrictRedis(connection_pool=rpool)
+        self._quiet = os.environ.get("REDISPIPE_QUIET", None) is not None
 
     def run(self):
         # Publish to Redis whenever we get output
         for line in iter(self._fd.readline, b''):
             self._redis.publish(self._rqueue, line)
+            if not self._quiet:
+                print (line)
 
     def eof(self):
         return not self.is_alive()
