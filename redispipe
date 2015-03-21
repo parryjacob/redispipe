@@ -115,6 +115,10 @@ if __name__ == "__main__":
     except:
         pass
 
+    # Give it _another_ chance
+    if stdout.is_alive():
+        time.sleep(0.5)
+
     # Say bye to Redis
     try:
         p.unsubscribe()
