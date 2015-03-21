@@ -13,5 +13,3 @@ set this or this entire thing will be useless. Note: if you are running using
 `<process_name>` is the name of the `supervisord` process.
 
 `REDISPIPE_QUIET` - don't output anything (Redis prefix, termination, etc)
-
-`REDISPIPE_COMBINE` - if set, `stderr` will be merged into `stdout`
