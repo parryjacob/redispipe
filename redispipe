@@ -15,6 +15,7 @@ class SubprocessQueueReader(threading.Thread):
         threading.Thread.__init__(self)
         self._fd = fd
         self._rqueue = rqueue
+        self._rqueue_hist = "%s_history" % (rqueue,)
         self._redis = redis.StrictRedis(connection_pool=rpool)
         self._quiet = os.environ.get("REDISPIPE_QUIET", None) is not None
 
@@ -22,6 +23,8 @@ class SubprocessQueueReader(threading.Thread):
         # Publish to Redis whenever we get output
         for line in iter(self._fd.readline, b''):
             self._redis.publish(self._rqueue, line)
+            self._redis.lpush(self._rqueue_hist, line)
+            self._redis.ltrim(self._rqueue_hist, 0, 999) # limit to 1000 lines
             if not self._quiet:
                 print (line)
 
