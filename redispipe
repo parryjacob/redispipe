@@ -66,8 +66,10 @@ if __name__ == "__main__":
     # Start the desired process
     process = subprocess.Popen(cmd, stdout=slave, stderr=slave, stdin=subprocess.PIPE)
 
+    stdout_fd = os.fdopen(master)
+
     # Publish the messages from stdout/stderr
-    stdout = SubprocessQueueReader(os.fdopen(master), rpool, "%s_%s" % (redis_queue, "stdout"))
+    stdout = SubprocessQueueReader(stdout_fd, rpool, "%s_%s" % (redis_queue, "stdout"))
     stdout.start()
 
     # Subscribe to all desired stdin
@@ -91,21 +93,20 @@ if __name__ == "__main__":
             process.terminate()
         except:
             pass
+        try:
+            process.kill()
+        except:
+            pass
 
     if not quiet:
         print ("----- Process Terminated -----")
 
     # Wait for our threads to die
     stdout.join(timeout=5)
-    stderr.join(timeout=5)
 
     # Kill out file descriptors
     try:
-        process.stdout.close()
-    except:
-        pass
-    try:
-        process.stderr.close()
+        stdout_fd.close()
     except:
         pass
 
