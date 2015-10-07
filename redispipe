@@ -70,9 +70,9 @@ if __name__ == "__main__":
 
     # Start the desired process
     process = subprocess.Popen(cmd, stdout=slave, stderr=slave, stdin=subprocess.PIPE)
-	
-	# Handling SIGTERM gracefully
-	def reap_proc():
+    
+    # Handling SIGTERM gracefully
+    def reap_proc():
         print("redispipe terminated, reaping process")
         try:
             process.terminate()
@@ -88,7 +88,7 @@ if __name__ == "__main__":
         print("SIGTERM encountered -- terminating normally")
         sys.exit()
     signal.signal(signal.SIGTERM, sigterm_override)
-	
+
     stdout_fd = os.fdopen(master)
 
     # Publish the messages from stdout/stderr
