@@ -144,7 +144,7 @@ if __name__ == "__main__":
                 if message['type'] == 'message' or message['type'] == 'pmessage':
                     inp = message['data']
                     process.stdin.write(inp)
-                    process.stdin.write(b"\n")
+                    process.stdin.write("\n".encode('utf-8'))
             time.sleep(0.1)
     except KeyboardInterrupt:
         if not quiet:
