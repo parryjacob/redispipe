@@ -9,7 +9,7 @@ def read(*paths):
 
 setup(
     name='redispipe',
-    version='1.0.3',
+    version='1.0.4',
     description='Wrap a process\' stdin/stdout/stderr pipes with Redis pubsub queues',
     long_description=read('README.md'),
     url='https://github.com/parryjacob/redispipe',
