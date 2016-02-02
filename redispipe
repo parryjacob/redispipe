@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     # Get the command from the CLI
     cmd = sys.argv[1:]
-    cmd_hash = hashlib.md5(' '.join(cmd)).hexdigest()
+    cmd_hash = hashlib.md5(' '.join(cmd).encode('utf-8')).hexdigest()
 
     # Settings are specified in the environment
     redis_url = os.environ.get("REDISPIPE_URL", "redis://127.0.0.1:6379")
