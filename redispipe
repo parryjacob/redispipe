@@ -20,13 +20,44 @@ class SubprocessQueueReader(threading.Thread):
         self._rqueue_hist = "%s_history" % (rqueue,)
         self._redis = redis.StrictRedis(connection_pool=rpool)
         self._quiet = os.environ.get("REDISPIPE_QUIET", None) is not None
+        self._queued_msgs = []
 
+    def _pub(self, line):
+        try:
+            self._redis.publish(self._rqueue, line)
+            self._redis.lpush(self._rqueue_hist, line)
+            self._redis.ltrim(self._rqueue_hist, 0, 999)
+            return True
+        except redis.exceptions.ConnectionError:
+            return False
+        
     def run(self):
         # Publish to Redis whenever we get output
         for line in iter(self._fd.readline, b''):
-            self._redis.publish(self._rqueue, line)
-            self._redis.lpush(self._rqueue_hist, line)
-            self._redis.ltrim(self._rqueue_hist, 0, 999) # limit to 1000 lines
+            
+            if len(self._queued_msgs) > 0:
+                while True:
+                    try:
+                        qline = self._queued_msgs.pop(0)
+                    except IndexError:
+                        # List is empty
+                        break
+                    
+                    if not self._pub(qline):
+                        self._queued_msgs.insert(0, qline)
+                        print("Couldn't publish queued line to redis!")
+                        time.sleep(2)
+                        continue # This will continue the while loop, attempting to push from the queued items
+                    else:
+                        if not self._quiet:
+                            print(qline)
+        
+            if not self._pub(line):
+                self._queued_msgs.append(line)
+                print("Couldn't publish to redis!")
+                time.sleep(2)
+                continue
+        
             if not self._quiet:
                 print (line)
 
@@ -103,7 +134,12 @@ if __name__ == "__main__":
 
     try:
         while process.poll() is None:
-            message = p.get_message()
+            try:
+                message = p.get_message()
+            except redis.exceptions.ConnectionError:
+                print("Can't connect to redis to get stdin!")
+                time.sleep(2)
+                continue
             if message is not None:
                 if message['type'] == 'message' or message['type'] == 'pmessage':
                     inp = message['data']
