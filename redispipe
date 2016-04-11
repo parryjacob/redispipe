@@ -21,12 +21,35 @@ class SubprocessQueueReader(threading.Thread):
         self._redis = redis.StrictRedis(connection_pool=rpool)
         self._quiet = os.environ.get("REDISPIPE_QUIET", None) is not None
         self._queued_msgs = []
+        self._last_line = None
+        self._last_line_n = 0
+
+    def _dupline(self, line):
+        if self._last_line is None:
+            return False
+        return self._last_line == line.strip().lower()
 
     def _pub(self, line):
+        # Check if we've published this last time
+        if self._dupline(line):
+            self._last_line_n += 1
+            return True
+        else:
+            n = self._last_line_n
+            self._last_line = line.strip().lower()
+            self._last_line_n = 1
+            if n > 1:
+                # We've duplicated lines before this, tell me about them
+                self._pub("Last line duplicated " + str(n - 1) + " times\n")
+
         try:
             self._redis.publish(self._rqueue, line)
             self._redis.lpush(self._rqueue_hist, line)
             self._redis.ltrim(self._rqueue_hist, 0, 999)
+
+            if not self._quiet:
+                print(line.rstrip())
+
             return True
         except redis.exceptions.ConnectionError:
             return False
@@ -47,19 +70,13 @@ class SubprocessQueueReader(threading.Thread):
                         self._queued_msgs.insert(0, qline)
                         print("Couldn't publish queued line to redis!")
                         time.sleep(2)
-                        continue # This will continue the while loop, attempting to push from the queued items
-                    else:
-                        if not self._quiet:
-                            print(qline)
-        
+                        continue  # This will continue the while loop, attempting to push from the queued items
+
             if not self._pub(line):
                 self._queued_msgs.append(line)
                 print("Couldn't publish to redis!")
                 time.sleep(2)
                 continue
-        
-            if not self._quiet:
-                print (line)
 
     def eof(self):
         return not self.is_alive()
