@@ -10,7 +10,18 @@ import time
 import pty
 import atexit
 import signal
+import collections
 
+
+class DescriptorReader(threading.Thread):
+    def __init__(self, fd, deque):
+        threading.Thread.__init__(self)
+        self._fd = fd
+        self._deque = deque
+
+    def run(self):
+        for line in iter(self._fd.readline, b''):
+            self._deque.append(line)
 
 class SubprocessQueueReader(threading.Thread):
     def __init__(self, fd, rpool, rqueue):
@@ -23,6 +34,9 @@ class SubprocessQueueReader(threading.Thread):
         self._queued_msgs = []
         self._last_line = None
         self._last_line_n = 0
+        self._deque = collections.deque(maxlen=1000)
+        self._reader = DescriptorReader(self._fd, self._deque)
+        self._reader.daemon = True
 
     def _dupline(self, line):
         if self._last_line is None:
@@ -55,9 +69,16 @@ class SubprocessQueueReader(threading.Thread):
             return False
         
     def run(self):
+        self._reader.start()
+
         # Publish to Redis whenever we get output
-        for line in iter(self._fd.readline, b''):
-            
+        while True:
+            try:
+                line = self._deque.popleft()
+            except IndexError:
+                time.sleep(0.01)
+                continue
+
             if len(self._queued_msgs) > 0:
                 while True:
                     try:
